@@ -1,7 +1,7 @@
 {
   "expo": {
-    "name": "Fitness_Tracker",
-    "slug": "Fitness_Tracker",
+    "name": "fitness-tracker",
+    "slug": "fitness-tracker",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",
@@ -32,7 +32,8 @@
           "resizeMode": "contain",
           "backgroundColor": "#ffffff"
         }
-      ]
+      ],
+      "expo-sqlite"
     ],
     "experiments": {
       "typedRoutes": true

@@ -1,99 +1,213 @@
-import { Image, StyleSheet, Platform, Text, TouchableOpacity } from 'react-native';
-
-import { HelloWave } from '@/components/HelloWave';
-import ParallaxScrollView from '@/components/ParallaxScrollView';
-import { ThemedText } from '@/components/ThemedText';
-import { ThemedView } from '@/components/ThemedView';
-
-import { useRouter } from 'expo-router'; // ✅ cambio clave
+import React, { useEffect } from 'react'; // Import useEffect
+import { View, StyleSheet, ScrollView } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
+import { Text, Card, Avatar, useTheme } from 'react-native-paper';
+import CircularProgress from 'react-native-circular-progress-indicator';
+import { useColorScheme } from '@/hooks/useColorScheme';
+import { useUser } from '@/context/UserContext'; // Import useUser
+import { getUserById } from '@/database/database'; // Import getUserById
 
 export default function HomeScreen() {
-  const router = useRouter(); // ✅ reemplaza a useNavigation
+  const theme = useTheme();
+  const colorScheme = useColorScheme();
+  const { currentUserId } = useUser(); // Get current user ID
+  const [userName, setUserName] = React.useState<string | null>(null);
+  const steps = 7580;
+  const stepGoal = 10000;
+  const distanceKm = 5.2;
+  const calories = 310;
+  const recentActivity = "Evening Run - 3.5 km";
+  const sleepHours = 7.5;
+  const heartRate = 68;
+  const currentWeight = 72.3;
+
+  // Fetch user data when component mounts or user ID changes
+  useEffect(() => {
+    async function fetchUserData() {
+      if (currentUserId) {
+        try {
+          const user = await getUserById(currentUserId);
+          setUserName(user?.nombre ?? null); // Set name, handle null user/name
+        } catch (error) {
+          console.error("Failed to fetch user data for home screen:", error);
+          setUserName(null); // Reset name on error
+        }
+      } else {
+        setUserName(null); // Reset name if no user ID
+      }
+    }
+    fetchUserData();
+  }, [currentUserId]); // Dependency array includes currentUserId
 
   return (
-    <ParallaxScrollView
-      headerBackgroundColor={{ light: '#A1CEDC', dark: '#1D3D47' }}
-      headerImage={
-        <Image
-          source={require('@/assets/images/partial-react-logo.png')}
-          style={styles.reactLogo}
-        />
-      }>
-      <ThemedView style={styles.titleContainer}>
-        <ThemedText type="title">Welcome!</ThemedText>
-        <HelloWave />
-      </ThemedView>
+    <SafeAreaView style={styles.safeArea}>
+      <ScrollView style={styles.scrollViewContainer}>
+        <View style={styles.header}>
+          <Text variant="headlineMedium">
+            Welcome{userName ? `, ${userName}` : ''}!
+          </Text>
+          <Text variant="bodyMedium" style={{ color: theme.colors.onSurfaceVariant }}>
+            Here's your daily summary:
+          </Text>
+        </View>
 
-      <ThemedView style={styles.stepContainer}>
-        <ThemedText type="subtitle">Step 1: Try it</ThemedText>
-        <ThemedText>
-          Edit <ThemedText type="defaultSemiBold">app/(tabs)/index.tsx</ThemedText> to see changes.
-          Press{' '}
-          <ThemedText type="defaultSemiBold">
-            {Platform.select({
-              ios: 'cmd + d',
-              android: 'cmd + m',
-              web: 'F12'
-            })}
-          </ThemedText>{' '}
-          to open developer tools.
-        </ThemedText>
-      </ThemedView>
+        <View style={styles.progressContainer}>
+          <CircularProgress
+            value={steps}
+            maxValue={stepGoal}
+            radius={80}
+            title={'Steps'}
+            titleStyle={{ ...styles.progressTitle, color: theme.colors.onSurfaceVariant }}
+            progressValueStyle={styles.progressValue}
+            activeStrokeColor={theme.colors.primary}
+            inActiveStrokeColor={theme.colors.surfaceDisabled}
+            inActiveStrokeOpacity={0.5}
+            activeStrokeWidth={10}
+            inActiveStrokeWidth={10}
+            duration={1000}
+          />
+        </View>
 
-      <ThemedView style={styles.stepContainer}>
-        <ThemedText type="subtitle">Step 2: Explore</ThemedText>
-        <ThemedText>
-          Tap the Explore tab to learn more about what's included in this starter app.
-        </ThemedText>
-      </ThemedView>
+        <View style={styles.grid}>
 
-      <ThemedView style={styles.stepContainer}>
-        <ThemedText type="subtitle">Step 3: Get a fresh start</ThemedText>
-        <ThemedText>
-          When you're ready, run{' '}
-          <ThemedText type="defaultSemiBold">npm run reset-project</ThemedText> to get a fresh{' '}
-          <ThemedText type="defaultSemiBold">app</ThemedText> directory. This will move the current{' '}
-          <ThemedText type="defaultSemiBold">app</ThemedText> to{' '}
-          <ThemedText type="defaultSemiBold">app-example</ThemedText>.
-        </ThemedText>
-      </ThemedView>
+          <Card style={styles.card}>
+            <Card.Content style={styles.cardContent}>
+              <Avatar.Icon
+                size={40}
+                icon="map-marker-distance"
+                style={styles.icon}
+                color={colorScheme === 'dark' ? 'white' : 'black'}
+              />
+              <View>
+                <Text variant="titleMedium">{distanceKm.toFixed(1)} km</Text>
+                <Text variant="bodySmall">Distance</Text>
+              </View>
+            </Card.Content>
+          </Card>
 
-      <ThemedView style={styles.stepContainer}>
-        <TouchableOpacity style={styles.button} onPress={() => router.push('/Main')}>
-          <Text style={styles.buttonText}>Ir a ventana principal</Text>
-        </TouchableOpacity>
-      </ThemedView>
-    </ParallaxScrollView>
+          <Card style={styles.card}>
+            <Card.Content style={styles.cardContent}>
+              <Avatar.Icon
+                size={40}
+                icon="fire"
+                style={styles.icon}
+                color={colorScheme === 'dark' ? 'white' : 'black'}
+              />
+              <View>
+                <Text variant="titleMedium">{calories}</Text>
+                <Text variant="bodySmall">Calories Burned</Text>
+              </View>
+            </Card.Content>
+          </Card>
+
+          <Card style={styles.card}>
+            <Card.Content style={styles.cardContent}>
+              <Avatar.Icon
+                size={40}
+                icon="bed"
+                style={styles.icon}
+                color={colorScheme === 'dark' ? 'white' : 'black'}
+              />
+              <View>
+                <Text variant="titleMedium">{sleepHours.toFixed(1)} hr</Text>
+                <Text variant="bodySmall">Sleep</Text>
+              </View>
+            </Card.Content>
+          </Card>
+
+          <Card style={styles.card}>
+            <Card.Content style={styles.cardContent}>
+              <Avatar.Icon
+                size={40}
+                icon="heart-pulse"
+                style={styles.icon}
+                color={colorScheme === 'dark' ? 'white' : 'black'}
+              />
+              <View>
+                <Text variant="titleMedium">{heartRate} bpm</Text>
+                <Text variant="bodySmall">Heart Rate</Text>
+              </View>
+            </Card.Content>
+          </Card>
+
+          <Card style={styles.card}>
+            <Card.Content style={styles.cardContent}>
+              <Avatar.Icon
+                size={40}
+                icon="scale-bathroom"
+                style={styles.icon}
+                color={colorScheme === 'dark' ? 'white' : 'black'}
+              />
+              <View>
+                <Text variant="titleMedium">{currentWeight.toFixed(1)} kg</Text>
+                <Text variant="bodySmall">Weight</Text>
+              </View>
+            </Card.Content>
+          </Card>
+
+          <Card style={[styles.card, styles.fullWidthCard]}>
+            <Card.Title
+              title="Recent Activity"
+              left={(props) => <Avatar.Icon {...props} icon="history" size={40} />}
+            />
+            <Card.Content>
+              <Text variant="bodyLarge">{recentActivity}</Text>
+              <Text variant="bodySmall" style={{ marginTop: 4, color: theme.colors.onSurfaceVariant }}>
+                Yesterday, 6:30 PM - 30 min
+              </Text>
+            </Card.Content>
+          </Card>
+
+        </View>
+      </ScrollView>
+    </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
-  titleContainer: {
+  safeArea: {
+    flex: 1,
+  },
+  scrollViewContainer: {
+    flex: 1,
+  },
+  header: {
+    paddingHorizontal: 16,
+    paddingTop: 16,
+    paddingBottom: 8,
+  },
+  grid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    justifyContent: 'space-between',
+    paddingHorizontal: 8,
+    paddingTop: 8,
+  },
+  progressContainer: {
+    alignItems: 'center',
+    paddingVertical: 20,
+    marginBottom: 10,
+  },
+  progressTitle: {
+    fontWeight: 'bold',
+  },
+  progressValue: {
+    fontWeight: '500',
+    fontSize: 16,
+  },
+  card: {
+    width: '48%',
+    marginBottom: 12,
+  },
+  fullWidthCard: {
+    width: '100%',
+  },
+  cardContent: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 8,
   },
-  stepContainer: {
-    gap: 8,
-    marginBottom: 8,
-  },
-  reactLogo: {
-    height: 178,
-    width: 290,
-    bottom: 0,
-    left: 0,
-    position: 'absolute',
-  },
-  button: {
-    backgroundColor: '#0a6c8d',
-    paddingVertical: 10,
-    paddingHorizontal: 20,
-    borderRadius: 8,
-    alignItems: 'center',
-  },
-  buttonText: {
-    color: '#fff',
-    fontWeight: 'bold',
-    fontSize: 16,
+  icon: {
+    marginRight: 12,
+    backgroundColor: 'transparent',
   },
 });
