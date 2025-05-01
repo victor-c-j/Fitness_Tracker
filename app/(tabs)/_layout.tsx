@@ -26,6 +26,13 @@ export default function TabLayout() {
         }),
       }}>
       <Tabs.Screen
+        name="map"
+        options={{
+          title: 'Today\'s Route',
+          tabBarIcon: ({ color }) => <IconSymbol size={28} name="map.fill" color={color} />,
+        }}
+      />
+      <Tabs.Screen
         name="index"
         options={{
           title: 'Home',
@@ -37,6 +44,20 @@ export default function TabLayout() {
         options={{
           title: 'Food Log',
           tabBarIcon: ({ color }) => <IconSymbol size={28} name="fork.knife.circle.fill" color={color} />,
+        }}
+      />
+      <Tabs.Screen
+        name="schedule"
+        options={{
+          title: 'Schedule',
+          tabBarIcon: ({ color }) => <IconSymbol size={28} name="calendar.circle.fill" color={color} />,
+        }}
+      />
+      <Tabs.Screen
+        name="rest-days"
+        options={{
+          title: 'Rest Days',
+          tabBarIcon: ({ color }) => <IconSymbol size={28} name="moon.zzz.fill" color={color} />,
         }}
       />
     </Tabs>

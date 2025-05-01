@@ -1,4 +1,5 @@
 import * as SQLite from 'expo-sqlite';
+import { NewUsuario, NewComida, Comida, NewConsumo, Usuario, Ruta, NewRuta } from './entities'; // Add NewComida
 import { Platform } from 'react-native';
 
 const DATABASE_NAME = 'fitnessTracker.db';
@@ -108,7 +109,6 @@ export function getDatabase(): SQLite.SQLiteDatabase {
     return db;
 }
 
-import { NewUsuario, NewComida } from './entities'; // Add NewComida
 
 // Function to seed initial food data
 async function seedFoods(dbInstance: SQLite.SQLiteDatabase): Promise<void> {
@@ -198,7 +198,6 @@ export async function hasUsers(): Promise<boolean> {
     throw error;
   }
 }
-import { Comida, NewConsumo } from './entities'; // Add Comida and NewConsumo
 
 export async function getAllFoods(): Promise<Comida[]> {
   const dbInstance = getDatabase();
@@ -261,7 +260,6 @@ export async function getCaloriesForDate(userId: number, date: Date): Promise<nu
     throw error;
   }
 }
-import { Usuario } from './entities'; // Add Usuario
 
 export async function getAllUsers(): Promise<Usuario[]> {
   const dbInstance = getDatabase();
@@ -281,6 +279,55 @@ export async function getUserById(userId: number): Promise<Usuario | null> {
     return result ?? null;
   } catch (error) {
     console.error(`Failed to get user by ID ${userId}:`, error);
+    throw error;
+  }
+}
+
+// Save a route to the database
+export async function saveRoute(route: NewRuta): Promise<number> {
+  const dbInstance = getDatabase();
+  try {
+    const result = await dbInstance.runAsync(
+      'INSERT INTO Ruta (usuario_id, fecha, distancia, coordenadas) VALUES (?, ?, ?, ?)',
+      route.usuario_id,
+      route.fecha,
+      route.distancia ?? null,
+      route.coordenadas ?? null
+    );
+    console.log(`Route saved with ID: ${result.lastInsertRowId}`);
+    return result.lastInsertRowId;
+  } catch (error) {
+    console.error('Failed to save route:', error);
+    throw error;
+  }
+}
+
+// Get all routes for a user
+export async function getRoutesForUser(userId: number): Promise<Ruta[]> {
+  const dbInstance = getDatabase();
+  try {
+    const results = await dbInstance.getAllAsync<Ruta>(
+      'SELECT * FROM Ruta WHERE usuario_id = ? ORDER BY fecha DESC',
+      userId
+    );
+    return results ?? [];
+  } catch (error) {
+    console.error('Failed to get routes for user:', error);
+    throw error;
+  }
+}
+
+// Get a specific route by ID
+export async function getRouteById(routeId: number): Promise<Ruta | null> {
+  const dbInstance = getDatabase();
+  try {
+    const result = await dbInstance.getFirstAsync<Ruta>(
+      'SELECT * FROM Ruta WHERE id = ?',
+      routeId
+    );
+    return result ?? null;
+  } catch (error) {
+    console.error(`Failed to get route with ID ${routeId}:`, error);
     throw error;
   }
 }

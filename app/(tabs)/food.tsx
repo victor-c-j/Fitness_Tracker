@@ -109,8 +109,12 @@ export default function FoodTrackingScreen() {
   };
 
   const handlePickerChange = (event: DateTimePickerEvent, date?: Date) => {
+    setShowDatePicker(Platform.OS === 'ios');
     if (date) {
       setLogDateInPicker(date);
+      if (Platform.OS === 'android') {
+        performLogFood(date);
+      }
     }
   };
 
@@ -227,6 +231,7 @@ export default function FoodTrackingScreen() {
             mode="date"
             display={Platform.OS === 'ios' ? 'spinner' : 'default'}
             onChange={handlePickerChange}
+            maximumDate={new Date()}
           />
           <View style={styles.modalButtonContainer}>
             <Button onPress={onCancelLogDate} style={styles.modalButton}>Cancel</Button>
