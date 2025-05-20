@@ -15,13 +15,15 @@ import {
   AppState,
 } from 'react-native';
 import { MaterialIcons } from '@expo/vector-icons';
-import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as Notifications from 'expo-notifications';
 import * as Device from 'expo-device';
 import { useColorScheme } from '@/hooks/useColorScheme';
 import { Colors } from '@/constants/Colors';
 import DateTimePicker from '@react-native-community/datetimepicker';
 import { format, addMinutes, isBefore, isToday, isPast, parseISO } from 'date-fns';
+import { useUser } from '@/context/UserContext';
+import { addScheduledRun, getScheduledRunsByUserId, updateScheduledRun, deleteScheduledRun } from '@/database/database';
+import { ScheduledRun as DBScheduledRun, NewScheduledRun } from '@/database/entities';
 
 // Configure notifications
 Notifications.setNotificationHandler({
@@ -54,29 +56,30 @@ const getRandomMessage = () => {
 
 // Schedule type
 type ScheduledRun = {
-  id: string;
+  id: number;
+  usuario_id: number;
   title: string;
   dateTime: string;
   days: number[]; // For weekly recurring (0 = Sunday, 6 = Saturday)
   isRecurring: boolean;
   notificationIds: string[]; // To track and cancel notifications
-  notifyBefore: number; // Minutes to notify before (default 30)
   active: boolean;
 };
 
 export default function ScheduleScreen() {
   const colorScheme = useColorScheme();
+  const { currentUserId } = useUser();
   const [schedules, setSchedules] = useState<ScheduledRun[]>([]);
   const [modalVisible, setModalVisible] = useState(false);
   const [editMode, setEditMode] = useState(false);
   const [currentSchedule, setCurrentSchedule] = useState<ScheduledRun>({
-    id: '',
+    id: 0,
+    usuario_id: currentUserId || 0,
     title: '',
     dateTime: new Date().toISOString(),
     days: [],
     isRecurring: false,
     notificationIds: [],
-    notifyBefore: 30,
     active: true,
   });
   const [notificationPermission, setNotificationPermission] = useState(false);
@@ -135,122 +138,26 @@ export default function ScheduleScreen() {
     };
   }, []);
   
-  // Load schedules from storage
+  // Load schedules from database
   const loadSchedules = async () => {
+    if (!currentUserId) return;
+    
     try {
-      const savedSchedules = await AsyncStorage.getItem('runningSchedules');
-      if (savedSchedules) {
-        setSchedules(JSON.parse(savedSchedules));
-      }
+      const dbSchedules = await getScheduledRunsByUserId(currentUserId);
+      const formattedSchedules: ScheduledRun[] = dbSchedules.map((schedule: DBScheduledRun) => ({
+        id: schedule.id,
+        usuario_id: schedule.usuario_id,
+        title: schedule.title,
+        dateTime: schedule.dateTime,
+        days: JSON.parse(schedule.days),
+        isRecurring: schedule.isRecurring,
+        notificationIds: JSON.parse(schedule.notificationIds),
+        active: schedule.active,
+      }));
+      setSchedules(formattedSchedules);
     } catch (error) {
       console.error('Failed to load schedules:', error);
     }
-  };
-  
-  // Save schedules to storage
-  const saveSchedules = async (updatedSchedules: ScheduledRun[]) => {
-    try {
-      await AsyncStorage.setItem('runningSchedules', JSON.stringify(updatedSchedules));
-    } catch (error) {
-      console.error('Failed to save schedules:', error);
-    }
-  };
-  
-  // Handle adding or updating a schedule
-  const handleSaveSchedule = async () => {
-    if (!currentSchedule.title.trim()) {
-      Alert.alert('Error', 'Please enter a title for your run');
-      return;
-    }
-    
-    // Validate date for non-recurring schedules
-    if (!currentSchedule.isRecurring) {
-      const scheduleDate = new Date(currentSchedule.dateTime);
-      if (isPast(scheduleDate) && !isToday(scheduleDate)) {
-        Alert.alert('Error', 'Please select a future date for your run');
-        return;
-      }
-    } else if (currentSchedule.days.length === 0) {
-      Alert.alert('Error', 'Please select at least one day for recurring runs');
-      return;
-    }
-    
-    // Cancel previous notifications if updating
-    if (editMode && currentSchedule.notificationIds.length > 0) {
-      await cancelScheduledNotifications(currentSchedule.notificationIds);
-    }
-    
-    // Schedule new notifications and get IDs
-    const notificationIds = await scheduleNotifications(currentSchedule);
-    
-    const updatedSchedule: ScheduledRun = {
-      ...currentSchedule,
-      id: editMode ? currentSchedule.id : Date.now().toString(),
-      notificationIds,
-    };
-    
-    let updatedSchedules: ScheduledRun[];
-    if (editMode) {
-      updatedSchedules = schedules.map(schedule => 
-        schedule.id === updatedSchedule.id ? updatedSchedule : schedule
-      );
-    } else {
-      updatedSchedules = [...schedules, updatedSchedule];
-    }
-    
-    setSchedules(updatedSchedules);
-    await saveSchedules(updatedSchedules);
-    setModalVisible(false);
-    resetForm();
-  };
-  
-  // Handle deleting a schedule
-  const handleDeleteSchedule = async (id: string) => {
-    const scheduleToDelete = schedules.find(schedule => schedule.id === id);
-    if (scheduleToDelete) {
-      // Cancel notifications
-      await cancelScheduledNotifications(scheduleToDelete.notificationIds);
-      
-      // Remove from state and storage
-      const updatedSchedules = schedules.filter(schedule => schedule.id !== id);
-      setSchedules(updatedSchedules);
-      await saveSchedules(updatedSchedules);
-    }
-  };
-  
-  // Reset form state
-  const resetForm = () => {
-    setCurrentSchedule({
-      id: '',
-      title: '',
-      dateTime: new Date().toISOString(),
-      days: [],
-      isRecurring: false,
-      notificationIds: [],
-      notifyBefore: 30,
-      active: true,
-    });
-    setEditMode(false);
-  };
-  
-  // Toggle a day selection for recurring runs
-  const toggleDay = (day: number) => {
-    setCurrentSchedule(prev => {
-      const updatedDays = prev.days.includes(day)
-        ? prev.days.filter(d => d !== day)
-        : [...prev.days, day];
-      
-      return {
-        ...prev,
-        days: updatedDays,
-      };
-    });
-  };
-  
-  // Get day name from number
-  const getDayName = (day: number): string => {
-    const days = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
-    return days[day];
   };
   
   // Schedule notifications
@@ -268,6 +175,7 @@ export default function ScheduleScreen() {
     }
     
     const notificationIds: string[] = [];
+    const NOTIFY_BEFORE = 30; // Default notification time in minutes
     
     try {
       if (schedule.isRecurring) {
@@ -277,7 +185,7 @@ export default function ScheduleScreen() {
             schedule.title,
             day,
             schedule.dateTime,
-            schedule.notifyBefore
+            NOTIFY_BEFORE
           );
           if (notificationId) {
             notificationIds.push(notificationId);
@@ -286,7 +194,7 @@ export default function ScheduleScreen() {
       } else {
         // Schedule one-time notification
         const runTime = new Date(schedule.dateTime);
-        const notifyTime = addMinutes(runTime, -schedule.notifyBefore);
+        const notifyTime = addMinutes(runTime, -NOTIFY_BEFORE);
         
         if (isBefore(notifyTime, new Date())) {
           console.log('Notification time is in the past, not scheduling');
@@ -296,14 +204,15 @@ export default function ScheduleScreen() {
         const notificationId = await Notifications.scheduleNotificationAsync({
           content: {
             title: 'Upcoming Run',
-            body: `${getRandomMessage()} Your scheduled run "${schedule.title}" starts in ${schedule.notifyBefore} minutes.`,
+            body: `${getRandomMessage()} Your scheduled run "${schedule.title}" starts in ${NOTIFY_BEFORE} minutes.`,
             sound: true,
             data: { scheduleId: schedule.id },
           },
           trigger: {
-            type: 'date',
-            date: notifyTime,
-          },
+            type: 'timeInterval',
+            seconds: Math.floor((notifyTime.getTime() - new Date().getTime()) / 1000),
+            repeats: false,
+          } as Notifications.NotificationTriggerInput,
         });
         
         if (notificationId) {
@@ -327,21 +236,14 @@ export default function ScheduleScreen() {
   ): Promise<string | null> => {
     try {
       const timeOfDay = new Date(timeString);
-      
-      // Calculate trigger
-      const trigger = {
-        type: 'weekly',
-        weekday: weekDay + 1, // Expo uses 1-7 for weekdays
-        hour: timeOfDay.getHours(),
-        minute: timeOfDay.getMinutes() - notifyBefore,
-      } as Notifications.NotificationTriggerInput;
+      const localTime = new Date(timeOfDay.getTime() - timeOfDay.getTimezoneOffset() * 60000);
+      let hour = localTime.getHours();
+      let minute = localTime.getMinutes() - notifyBefore;
       
       // Adjust for negative minutes
-      if ('minute' in trigger && trigger.minute < 0) {
-        if ('hour' in trigger) {
-          trigger.hour = (trigger.hour as number - 1 + 24) % 24;
-          trigger.minute = 60 + (trigger.minute as number);
-        }
+      if (minute < 0) {
+        hour = (hour - 1 + 24) % 24;
+        minute = 60 + minute;
       }
       
       const notificationId = await Notifications.scheduleNotificationAsync({
@@ -350,7 +252,12 @@ export default function ScheduleScreen() {
           body: `${getRandomMessage()} Your weekly ${getDayName(weekDay)} run "${title}" starts in ${notifyBefore} minutes.`,
           sound: true,
         },
-        trigger,
+        trigger: {
+          type: 'daily',
+          hour,
+          minute,
+          repeats: true,
+        } as Notifications.NotificationTriggerInput,
       });
       
       return notificationId;
@@ -372,53 +279,48 @@ export default function ScheduleScreen() {
   };
   
   // Toggle schedule active state
-  const toggleScheduleActive = async (id: string) => {
-    const updatedSchedules = schedules.map(schedule => {
-      if (schedule.id === id) {
-        return {
-          ...schedule,
-          active: !schedule.active,
-        };
-      }
-      return schedule;
-    });
-    
-    setSchedules(updatedSchedules);
-    await saveSchedules(updatedSchedules);
-    
-    // Cancel or reschedule notifications based on new state
-    const toggledSchedule = updatedSchedules.find(s => s.id === id);
-    if (toggledSchedule) {
-      if (!toggledSchedule.active) {
-        await cancelScheduledNotifications(toggledSchedule.notificationIds);
-        const updatedSchedule = {
-          ...toggledSchedule,
-          notificationIds: [],
-        };
-        
-        const finalSchedules = updatedSchedules.map(s => 
+  const toggleScheduleActive = async (id: number) => {
+    try {
+      const schedule = schedules.find(s => s.id === id);
+      if (!schedule) return;
+
+      const updatedSchedule = {
+        ...schedule,
+        active: !schedule.active,
+      };
+
+      // Update in database
+      await updateScheduledRun(id, {
+        usuario_id: schedule.usuario_id,
+        title: schedule.title,
+        dateTime: schedule.dateTime,
+        days: schedule.days.toString(),
+        isRecurring: schedule.isRecurring,
+        notificationIds: schedule.notificationIds.toString(),
+        active: !schedule.active,
+      });
+
+      // Update UI state
+      setSchedules(prevSchedules => 
+        prevSchedules.map(s => 
           s.id === id ? updatedSchedule : s
-        );
-        
-        setSchedules(finalSchedules);
-        await saveSchedules(finalSchedules);
+        )
+      );
+
+      // Handle notifications
+      if (!updatedSchedule.active) {
+        // Cancel notifications if schedule is deactivated
+        await cancelScheduledNotifications(schedule.notificationIds);
       } else {
-        // Reschedule notifications
-        await cancelScheduledNotifications(toggledSchedule.notificationIds);
-        const notificationIds = await scheduleNotifications(toggledSchedule);
-        
-        const updatedSchedule = {
-          ...toggledSchedule,
-          notificationIds,
-        };
-        
-        const finalSchedules = updatedSchedules.map(s => 
-          s.id === id ? updatedSchedule : s
-        );
-        
-        setSchedules(finalSchedules);
-        await saveSchedules(finalSchedules);
+        // Reschedule notifications if schedule is activated
+        const notificationIds = await scheduleNotifications(updatedSchedule);
+        await updateScheduledRun(id, {
+          notificationIds: JSON.stringify(notificationIds),
+        });
       }
+    } catch (error) {
+      console.error('Failed to toggle schedule:', error);
+      Alert.alert('Error', 'Failed to update schedule status');
     }
   };
   
@@ -538,6 +440,128 @@ export default function ScheduleScreen() {
     );
   };
   
+  // Handle adding or updating a schedule
+  const handleSaveSchedule = async () => {
+    if (!currentUserId) {
+      Alert.alert('Error', 'No user selected');
+      return;
+    }
+
+    if (!currentSchedule.title.trim()) {
+      Alert.alert('Error', 'Please enter a title for your run');
+      return;
+    }
+    
+    // Validate date for non-recurring schedules
+    if (!currentSchedule.isRecurring) {
+      const scheduleDate = new Date(currentSchedule.dateTime);
+      if (isPast(scheduleDate) && !isToday(scheduleDate)) {
+        Alert.alert('Error', 'Please select a future date for your run');
+        return;
+      }
+    } else if (currentSchedule.days.length === 0) {
+      Alert.alert('Error', 'Please select at least one day for recurring runs');
+      return;
+    }
+    
+    // Cancel previous notifications if updating
+    if (editMode && currentSchedule.notificationIds.length > 0) {
+      await cancelScheduledNotifications(currentSchedule.notificationIds);
+    }
+    
+    // Schedule new notifications and get IDs
+    const notificationIds = await scheduleNotifications(currentSchedule);
+    
+    const newSchedule: NewScheduledRun = {
+      usuario_id: currentUserId,
+      title: currentSchedule.title,
+      dateTime: currentSchedule.dateTime,
+      days: JSON.stringify(currentSchedule.days),
+      isRecurring: currentSchedule.isRecurring,
+      notificationIds: JSON.stringify(notificationIds),
+      active: currentSchedule.active,
+    };
+    
+    try {
+      if (editMode) {
+        await updateScheduledRun(currentSchedule.id, newSchedule);
+      } else {
+        const id = await addScheduledRun(newSchedule);
+        currentSchedule.id = id;
+      }
+
+      setModalVisible(false);
+      loadSchedules();
+      resetForm();
+    } catch (error) {
+      console.error('Failed to save schedule:', error);
+      Alert.alert('Error', 'Failed to save schedule');
+    }
+  };
+  
+  // Handle deleting a schedule
+  const handleDeleteSchedule = async (id: number) => {
+    Alert.alert(
+      'Delete Schedule',
+      'Are you sure you want to delete this schedule?',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Delete',
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              const schedule = schedules.find(s => s.id === id);
+              if (schedule) {
+                await cancelScheduledNotifications(schedule.notificationIds);
+              }
+              await deleteScheduledRun(id);
+              loadSchedules();
+            } catch (error) {
+              console.error('Failed to delete schedule:', error);
+              Alert.alert('Error', 'Failed to delete schedule');
+            }
+          },
+        },
+      ]
+    );
+  };
+  
+  // Reset form state
+  const resetForm = () => {
+    setCurrentSchedule({
+      id: 0,
+      usuario_id: currentUserId || 0,
+      title: '',
+      dateTime: new Date().toISOString(),
+      days: [],
+      isRecurring: false,
+      notificationIds: [],
+      active: true,
+    });
+    setEditMode(false);
+  };
+  
+  // Toggle a day selection for recurring runs
+  const toggleDay = (day: number) => {
+    setCurrentSchedule(prev => {
+      const updatedDays = prev.days.includes(day)
+        ? prev.days.filter(d => d !== day)
+        : [...prev.days, day];
+      
+      return {
+        ...prev,
+        days: updatedDays,
+      };
+    });
+  };
+  
+  // Get day name from number
+  const getDayName = (day: number): string => {
+    const days = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+    return days[day];
+  };
+  
   return (
     <SafeAreaView style={[styles.container, { backgroundColor }]}>
       <ScrollView style={styles.scrollContainer} contentContainerStyle={styles.scrollContentContainer}>
@@ -609,10 +633,6 @@ export default function ScheduleScreen() {
                     <Text style={[styles.scheduleTime, { color: subtextColor }]}>
                       Time: {format(new Date(schedule.dateTime), 'h:mm a')}
                     </Text>
-                    
-                    <Text style={[styles.notifyText, { color: subtextColor }]}>
-                      Notification: {schedule.notifyBefore} minutes before
-                    </Text>
                   </View>
                   
                   <View style={styles.scheduleActions}>
@@ -626,14 +646,7 @@ export default function ScheduleScreen() {
                     <TouchableOpacity
                       style={styles.deleteButton}
                       onPress={() => {
-                        Alert.alert(
-                          'Delete Schedule',
-                          'Are you sure you want to delete this schedule?',
-                          [
-                            { text: 'Cancel', style: 'cancel' },
-                            { text: 'Delete', onPress: () => handleDeleteSchedule(schedule.id), style: 'destructive' }
-                          ]
-                        );
+                        handleDeleteSchedule(schedule.id);
                       }}
                     >
                       <MaterialIcons name="delete" size={20} color={errorColor} />
@@ -837,36 +850,6 @@ export default function ScheduleScreen() {
                 )}
               </View>
             )}
-            
-            {/* Notification Time */}
-            <Text style={[styles.inputLabel, { color: textColor, marginTop: 16 }]}>
-              Notify Before (minutes)
-            </Text>
-            <View style={styles.notifyOptions}>
-              {[15, 30, 45, 60].map(minutes => (
-                <TouchableOpacity
-                  key={minutes}
-                  style={[
-                    styles.notifyOption,
-                    { borderColor: borderColor },
-                    currentSchedule.notifyBefore === minutes && { 
-                      backgroundColor: tintColor,
-                      borderColor: tintColor
-                    }
-                  ]}
-                  onPress={() => setCurrentSchedule(prev => ({ ...prev, notifyBefore: minutes }))}
-                >
-                  <Text 
-                    style={[
-                      { color: textColor },
-                      currentSchedule.notifyBefore === minutes && { color: 'white' }
-                    ]}
-                  >
-                    {minutes} min
-                  </Text>
-                </TouchableOpacity>
-              ))}
-            </View>
           </ScrollView>
           
           <View style={styles.modalFooter}>

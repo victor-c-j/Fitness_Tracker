@@ -1,5 +1,5 @@
 import * as SQLite from 'expo-sqlite';
-import { NewUsuario, NewComida, Comida, NewConsumo, Usuario, Ruta, NewRuta } from './entities'; // Add NewComida
+import { NewUsuario, NewComida, Comida, NewConsumo, Usuario, Ruta, NewRuta, NewScheduledRun, ScheduledRun } from './entities'; // Add NewComida
 import { Platform } from 'react-native';
 
 const DATABASE_NAME = 'fitnessTracker.db';
@@ -43,6 +43,19 @@ CREATE TABLE IF NOT EXISTS Consumo (
 const CREATE_INDEX_RUTA_SQL = `CREATE INDEX IF NOT EXISTS idx_ruta_usuario_fecha ON Ruta(usuario_id, fecha);`;
 const CREATE_INDEX_CONSUMO_USUARIO_SQL = `CREATE INDEX IF NOT EXISTS idx_consumo_usuario_fecha ON Consumo(usuario_id, fecha);`;
 const CREATE_INDEX_CONSUMO_COMIDA_SQL = `CREATE INDEX IF NOT EXISTS idx_consumo_comida ON Consumo(comida_id);`;
+const CREATE_SCHEDULED_RUN_SQL = `
+CREATE TABLE IF NOT EXISTS ScheduledRun (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    usuario_id INTEGER NOT NULL,
+    title TEXT NOT NULL,
+    dateTime TEXT NOT NULL,
+    isRecurring INTEGER NOT NULL,
+    days TEXT NOT NULL,
+    active INTEGER NOT NULL,
+    notificationIds TEXT NOT NULL,
+    FOREIGN KEY (usuario_id) REFERENCES Usuario(id) ON DELETE CASCADE
+);`;
+const CREATE_INDEX_SCHEDULED_RUN_SQL = `CREATE INDEX IF NOT EXISTS idx_scheduled_run_usuario ON ScheduledRun(usuario_id);`;
 
 
 let db: SQLite.SQLiteDatabase | null = null;
@@ -79,6 +92,10 @@ export async function initializeDatabase(): Promise<SQLite.SQLiteDatabase> {
       await openedDb.execAsync(CREATE_INDEX_CONSUMO_USUARIO_SQL);
       console.log('Creating Consumo comida index...');
       await openedDb.execAsync(CREATE_INDEX_CONSUMO_COMIDA_SQL);
+      console.log('Creating ScheduledRun table...');
+      await openedDb.execAsync(CREATE_SCHEDULED_RUN_SQL);
+      console.log('Creating ScheduledRun index...');
+      await openedDb.execAsync(CREATE_INDEX_SCHEDULED_RUN_SQL);
     });
     console.log('Schema creation transaction completed.');
 
@@ -328,6 +345,102 @@ export async function getRouteById(routeId: number): Promise<Ruta | null> {
     return result ?? null;
   } catch (error) {
     console.error(`Failed to get route with ID ${routeId}:`, error);
+    throw error;
+  }
+}
+
+// Add ScheduledRun functions
+export async function addScheduledRun(scheduledRun: NewScheduledRun): Promise<number> {
+  const dbInstance = getDatabase();
+  try {
+    const result = await dbInstance.runAsync(
+      'INSERT INTO ScheduledRun (usuario_id, title, dateTime, isRecurring, days, active, notificationIds) VALUES (?, ?, ?, ?, ?, ?, ?)',
+      scheduledRun.usuario_id,
+      scheduledRun.title,
+      scheduledRun.dateTime,
+      scheduledRun.isRecurring ? 1 : 0,
+      scheduledRun.days,
+      scheduledRun.active ? 1 : 0,
+      scheduledRun.notificationIds
+    );
+    console.log(`ScheduledRun added with ID: ${result.lastInsertRowId}`);
+    return result.lastInsertRowId;
+  } catch (error) {
+    console.error('Failed to add scheduled run:', error);
+    throw error;
+  }
+}
+
+export async function getScheduledRunsByUserId(userId: number): Promise<ScheduledRun[]> {
+  const dbInstance = getDatabase();
+  try {
+    const results = await dbInstance.getAllAsync<ScheduledRun>(
+      'SELECT * FROM ScheduledRun WHERE usuario_id = ? ORDER BY dateTime',
+      userId
+    );
+    return results.map(run => ({
+      ...run,
+      isRecurring: Boolean(run.isRecurring),
+      active: Boolean(run.active)
+    }));
+  } catch (error) {
+    console.error(`Failed to get scheduled runs for user ${userId}:`, error);
+    throw error;
+  }
+}
+
+export async function updateScheduledRun(id: number, scheduledRun: Partial<NewScheduledRun>): Promise<void> {
+  const dbInstance = getDatabase();
+  try {
+    const updates: string[] = [];
+    const values: any[] = [];
+
+    if (scheduledRun.title !== undefined) {
+      updates.push('title = ?');
+      values.push(scheduledRun.title);
+    }
+    if (scheduledRun.dateTime !== undefined) {
+      updates.push('dateTime = ?');
+      values.push(scheduledRun.dateTime);
+    }
+    if (scheduledRun.isRecurring !== undefined) {
+      updates.push('isRecurring = ?');
+      values.push(scheduledRun.isRecurring ? 1 : 0);
+    }
+    if (scheduledRun.days !== undefined) {
+      updates.push('days = ?');
+      values.push(scheduledRun.days);
+    }
+    if (scheduledRun.active !== undefined) {
+      updates.push('active = ?');
+      values.push(scheduledRun.active ? 1 : 0);
+    }
+    if (scheduledRun.notificationIds !== undefined) {
+      updates.push('notificationIds = ?');
+      values.push(scheduledRun.notificationIds);
+    }
+
+    if (updates.length === 0) {
+      return;
+    }
+
+    values.push(id);
+    await dbInstance.runAsync(
+      `UPDATE ScheduledRun SET ${updates.join(', ')} WHERE id = ?`,
+      ...values
+    );
+  } catch (error) {
+    console.error(`Failed to update scheduled run ${id}:`, error);
+    throw error;
+  }
+}
+
+export async function deleteScheduledRun(id: number): Promise<void> {
+  const dbInstance = getDatabase();
+  try {
+    await dbInstance.runAsync('DELETE FROM ScheduledRun WHERE id = ?', id);
+  } catch (error) {
+    console.error(`Failed to delete scheduled run ${id}:`, error);
     throw error;
   }
 }
