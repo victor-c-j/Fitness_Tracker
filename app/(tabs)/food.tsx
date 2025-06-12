@@ -112,9 +112,6 @@ export default function FoodTrackingScreen() {
     setShowDatePicker(Platform.OS === 'ios');
     if (date) {
       setLogDateInPicker(date);
-      if (Platform.OS === 'android') {
-        performLogFood(date);
-      }
     }
   };
 
@@ -123,7 +120,7 @@ export default function FoodTrackingScreen() {
     performLogFood(logDateInPicker);
   };
 
-   const onCancelLogDate = () => {
+  const onCancelLogDate = () => {
     setShowDatePicker(false);
     console.log("Date picker cancelled or dismissed.");
   };
