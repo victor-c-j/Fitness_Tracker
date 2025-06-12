@@ -13,10 +13,12 @@ import {
 import { Stack, useRouter } from 'expo-router';
 import { addUser } from '@/database/database';
 import { NewUsuario } from '@/database/entities';
+import { useUser } from '@/context/UserContext';
 
 export default function RegisterScreen() {
   const router = useRouter();
   const theme = useTheme();
+  const { setCurrentUserId } = useUser();
 
   const [nombre, setNombre] = useState('');
   const [edad, setEdad] = useState('');
@@ -72,6 +74,7 @@ export default function RegisterScreen() {
     try {
       const userId = await addUser(newUser);
       console.log(`User registered successfully with ID: ${userId}`);
+      setCurrentUserId(userId);
       router.replace('/(tabs)');
 
     } catch (error) {
