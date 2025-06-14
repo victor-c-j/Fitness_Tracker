@@ -1,4 +1,4 @@
-package com.anonymous.fitnesstracker
+package com.fitnessapp.fitnesstracker
 
 import android.app.Application
 import android.content.res.Configuration

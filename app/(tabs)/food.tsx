@@ -21,6 +21,7 @@ export default function FoodTrackingScreen() {
   const [selectedDate, setSelectedDate] = useState(new Date());
   const [showDatePicker, setShowDatePicker] = useState(false);
   const [logDateInPicker, setLogDateInPicker] = useState(new Date());
+  const [isProcessingLog, setIsProcessingLog] = useState(false);
 
   const loadData = useCallback(async () => {
     if (!currentUserId) {
@@ -74,6 +75,8 @@ export default function FoodTrackingScreen() {
   };
 
   const performLogFood = async (logDate: Date) => {
+    if (isProcessingLog) return;
+    
     const itemsToLog = Object.entries(selectedQuantities)
       .filter(([_, quantity]) => quantity > 0)
       .map(([foodId, quantity]) => ({ foodId: Number(foodId), quantity }));
@@ -83,6 +86,7 @@ export default function FoodTrackingScreen() {
       return;
     }
 
+    setIsProcessingLog(true);
     setLogging(true);
     try {
       for (const { foodId, quantity } of itemsToLog) {
@@ -105,24 +109,23 @@ export default function FoodTrackingScreen() {
       Alert.alert("Error", "Could not log food. Please try again.");
     } finally {
       setLogging(false);
+      setIsProcessingLog(false);
     }
   };
 
   const handlePickerChange = (event: DateTimePickerEvent, date?: Date) => {
-    setShowDatePicker(Platform.OS === 'ios');
-    if (date) {
-      setLogDateInPicker(date);
+    setShowDatePicker(false);
+    
+    if (event.type === 'dismissed') {
+      return;
     }
-  };
-
-  const onConfirmLogDate = () => {
-    setShowDatePicker(false);
-    performLogFood(logDateInPicker);
-  };
-
-  const onCancelLogDate = () => {
-    setShowDatePicker(false);
-    console.log("Date picker cancelled or dismissed.");
+    
+    if (date && !isProcessingLog) {
+      setLogDateInPicker(date);
+      if (Platform.OS === 'android') {
+        performLogFood(date);
+      }
+    }
   };
 
   const showLogDatePicker = () => {
@@ -215,27 +218,16 @@ export default function FoodTrackingScreen() {
         >
           Log Selected Food...
         </Button>
-      <Portal>
-        <Modal
-          visible={showDatePicker}
-          onDismiss={onCancelLogDate}
-          contentContainerStyle={[styles.modalContainer, { backgroundColor: theme.colors.background }]}
-        >
-          <Text variant="titleMedium" style={styles.modalTitle}>Select Log Date</Text>
-          <DateTimePicker
-            testID="dateTimePicker"
-            value={logDateInPicker}
-            mode="date"
-            display={Platform.OS === 'ios' ? 'spinner' : 'default'}
-            onChange={handlePickerChange}
-            maximumDate={new Date()}
-          />
-          <View style={styles.modalButtonContainer}>
-            <Button onPress={onCancelLogDate} style={styles.modalButton}>Cancel</Button>
-            <Button onPress={onConfirmLogDate} mode="contained" style={styles.modalButton}>Confirm</Button>
-          </View>
-        </Modal>
-      </Portal>
+      {showDatePicker && (
+        <DateTimePicker
+          testID="dateTimePicker"
+          value={logDateInPicker}
+          mode="date"
+          display={Platform.OS === 'ios' ? 'spinner' : 'default'}
+          onChange={handlePickerChange}
+          maximumDate={new Date()}
+        />
+      )}
     </SafeAreaView>
   );
 }

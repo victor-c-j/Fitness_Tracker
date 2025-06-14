@@ -21,7 +21,7 @@ extensions.configure(com.facebook.react.ReactSettingsExtension) { ex ->
   }
 }
 
-rootProject.name = 'fitness-tracker'
+rootProject.name = 'Fitness Tracker'
 
 dependencyResolutionManagement {
   versionCatalogs {
