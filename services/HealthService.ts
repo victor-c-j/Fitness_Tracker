@@ -11,6 +11,12 @@ export interface HealthData {
   lastUpdated: Date;
 }
 
+interface ActivityData {
+  steps: number;
+  distanceKm: number;
+  heartRate: number;
+}
+
 // Singleton HealthService class
 class HealthService {
   private static instance: HealthService;
@@ -257,6 +263,67 @@ class HealthService {
    */
   public getHealthData(): HealthData {
     return { ...this.healthData };
+  }
+
+  /**
+   * Update activity data after a run
+   * @param data Activity data to update
+   */
+  public static async updateActivityData(data: ActivityData): Promise<void> {
+    if (Platform.OS !== 'ios') {
+      console.log('HealthKit is only available on iOS');
+      return;
+    }
+
+    if (!this.isInitialized) {
+      await this.initialize();
+    }
+
+    try {
+      // Update steps
+      await new Promise<void>((resolve) => {
+        AppleHealthKit.saveSteps({
+          value: data.steps,
+          startDate: new Date().toISOString(),
+          endDate: new Date().toISOString(),
+        }, (err) => {
+          if (err) {
+            console.error('Error saving steps:', err);
+          }
+          resolve();
+        });
+      });
+
+      // Update distance
+      await new Promise<void>((resolve) => {
+        AppleHealthKit.saveDistance({
+          value: data.distanceKm,
+          startDate: new Date().toISOString(),
+          endDate: new Date().toISOString(),
+        }, (err) => {
+          if (err) {
+            console.error('Error saving distance:', err);
+          }
+          resolve();
+        });
+      });
+
+      // Update heart rate
+      await new Promise<void>((resolve) => {
+        AppleHealthKit.saveHeartRateSample({
+          value: data.heartRate,
+          startDate: new Date().toISOString(),
+          endDate: new Date().toISOString(),
+        }, (err) => {
+          if (err) {
+            console.error('Error saving heart rate:', err);
+          }
+          resolve();
+        });
+      });
+    } catch (error) {
+      console.error('Error updating activity data:', error);
+    }
   }
 }
 
