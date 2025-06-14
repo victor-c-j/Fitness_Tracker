@@ -20,12 +20,18 @@ export default function TabLayout() {
         tabBarBackground: TabBarBackground,
         tabBarStyle: Platform.select({
           ios: {
-            // Use a transparent background on iOS to show the blur effect
             position: 'absolute',
           },
           default: {},
         }),
       }}>
+      <Tabs.Screen
+        name="map"
+        options={{
+          title: 'Today\'s Route',
+          tabBarIcon: ({ color }) => <IconSymbol size={28} name="map.fill" color={color} />,
+        }}
+      />
       <Tabs.Screen
         name="index"
         options={{
@@ -34,10 +40,24 @@ export default function TabLayout() {
         }}
       />
       <Tabs.Screen
-        name="explore"
+        name="food"
         options={{
-          title: 'Explore',
-          tabBarIcon: ({ color }) => <IconSymbol size={28} name="paperplane.fill" color={color} />,
+          title: 'Food Log',
+          tabBarIcon: ({ color }) => <IconSymbol size={28} name="fork.knife.circle.fill" color={color} />,
+        }}
+      />
+      <Tabs.Screen
+        name="schedule"
+        options={{
+          title: 'Schedule',
+          tabBarIcon: ({ color }) => <IconSymbol size={28} name="calendar.circle.fill" color={color} />,
+        }}
+      />
+      <Tabs.Screen
+        name="rest-days"
+        options={{
+          title: 'Rest Days',
+          tabBarIcon: ({ color }) => <IconSymbol size={28} name="moon.zzz.fill" color={color} />,
         }}
       />
     </Tabs>

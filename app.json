@@ -1,21 +1,42 @@
 {
   "expo": {
-    "name": "Fitness_Tracker",
-    "slug": "Fitness_Tracker",
+    "name": "Fitness Tracker",
+    "slug": "fitness-tracker",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",
     "scheme": "myapp",
     "userInterfaceStyle": "automatic",
     "newArchEnabled": true,
+    "splash": {
+      "image": "./assets/images/splash-icon.png",
+      "resizeMode": "contain",
+      "backgroundColor": "#ffffff"
+    },
+    "assetBundlePatterns": [
+      "**/*"
+    ],
     "ios": {
-      "supportsTablet": true
+      "supportsTablet": true,
+      "bundleIdentifier": "com.fitnessapp.fitnesstracker",
+      "infoPlist": {
+        "NSHealthShareUsageDescription": "This app uses your health data to track your fitness progress",
+        "NSHealthUpdateUsageDescription": "This app saves your workout data to Apple Health"
+      }
     },
     "android": {
       "adaptiveIcon": {
         "foregroundImage": "./assets/images/adaptive-icon.png",
         "backgroundColor": "#ffffff"
-      }
+      },
+      "package": "com.fitnessapp.fitnesstracker",
+      "versionCode": 1,
+      "permissions": [
+        "android.permission.ACTIVITY_RECOGNITION",
+        "android.permission.ACCESS_FINE_LOCATION",
+        "android.permission.ACCESS_COARSE_LOCATION",
+        "android.permission.BODY_SENSORS"
+      ]
     },
     "web": {
       "bundler": "metro",
@@ -32,10 +53,20 @@
           "resizeMode": "contain",
           "backgroundColor": "#ffffff"
         }
-      ]
+      ],
+      "expo-sqlite",
+      "react-native-health"
     ],
     "experiments": {
       "typedRoutes": true
+    },
+    "extra": {
+      "router": {
+        "origin": false
+      },
+      "eas": {
+        "projectId": "ef364690-35bd-4ce1-b115-d9e30390bbfa"
+      }
     }
   }
 }
