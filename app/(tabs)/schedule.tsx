@@ -294,9 +294,9 @@ export default function ScheduleScreen() {
         usuario_id: schedule.usuario_id,
         title: schedule.title,
         dateTime: schedule.dateTime,
-        days: schedule.days.toString(),
+        days: JSON.stringify(schedule.days),
         isRecurring: schedule.isRecurring,
-        notificationIds: schedule.notificationIds.toString(),
+        notificationIds: JSON.stringify(schedule.notificationIds),
         active: !schedule.active,
       });
 

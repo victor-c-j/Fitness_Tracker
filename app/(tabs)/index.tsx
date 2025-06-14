@@ -5,7 +5,7 @@ import { Text, Card, Avatar, useTheme, FAB, Divider } from 'react-native-paper';
 import CircularProgress from 'react-native-circular-progress-indicator';
 import { useColorScheme } from '@/hooks/useColorScheme';
 import { useUser } from '@/context/UserContext';
-import { getUserById, getCaloriesForDate } from '@/database/database';
+import { getUserById, getCaloriesForDate, getScheduledRunsByUserId } from '@/database/database';
 import { useFocusEffect, router } from 'expo-router';
 import HealthTracker from '@/services/HealthTracker';
 import { MaterialIcons } from '@expo/vector-icons';
@@ -20,13 +20,13 @@ const DEFAULT_AGE = 30;
 const DEFAULT_STEP_GOAL = 10000;
 
 type ScheduledRun = {
-  id: string;
+  id: number;
+  usuario_id: number;
   title: string;
   dateTime: string;
   days: number[];
   isRecurring: boolean;
   notificationIds: string[];
-  notifyBefore: number;
   active: boolean;
 };
 
@@ -187,35 +187,40 @@ export default function HomeScreen() {
 
   // Load upcoming runs
   const loadUpcomingRuns = useCallback(async () => {
+    if (!currentUserId) return;
+    
     try {
-      const savedSchedules = await AsyncStorage.getItem('runningSchedules');
-      if (savedSchedules) {
-        const schedules: ScheduledRun[] = JSON.parse(savedSchedules);
-        const filteredSchedules = schedules
-          .filter(schedule => schedule.active)
-          .filter(schedule => {
-            // Filter only upcoming runs (today or future)
-            if (schedule.isRecurring) {
-              // For recurring, always show if active
-              return true;
-            } else {
-              // For one-time, check if it's today or future
-              const scheduleDate = new Date(schedule.dateTime);
-              return isToday(scheduleDate) || scheduleDate > new Date();
-            }
-          })
-          .sort((a, b) => {
-            // Sort by date
-            return new Date(a.dateTime).getTime() - new Date(b.dateTime).getTime();
-          })
-          .slice(0, 3); // Show only next 3 upcoming runs
-        
-        setUpcomingRuns(filteredSchedules);
-      }
+      const dbSchedules = await getScheduledRunsByUserId(currentUserId);
+      const schedules: ScheduledRun[] = dbSchedules.map(schedule => ({
+        ...schedule,
+        days: JSON.parse(schedule.days),
+        notificationIds: JSON.parse(schedule.notificationIds)
+      }));
+      
+      const filteredSchedules = schedules
+        .filter(schedule => schedule.active)
+        .filter(schedule => {
+          // Filter only upcoming runs (today or future)
+          if (schedule.isRecurring) {
+            // For recurring, always show if active
+            return true;
+          } else {
+            // For one-time, check if it's today or future
+            const scheduleDate = new Date(schedule.dateTime);
+            return isToday(scheduleDate) || scheduleDate > new Date();
+          }
+        })
+        .sort((a, b) => {
+          // Sort by date
+          return new Date(a.dateTime).getTime() - new Date(b.dateTime).getTime();
+        })
+        .slice(0, 3); // Show only next 3 upcoming runs
+      
+      setUpcomingRuns(filteredSchedules);
     } catch (error) {
       console.error('Failed to load schedules:', error);
     }
-  }, []);
+  }, [currentUserId]);
   
   // Initial data loading
   useEffect(() => {
