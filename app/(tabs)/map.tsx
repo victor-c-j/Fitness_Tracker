@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { StyleSheet, View, Text, TouchableOpacity, AppState, Button, SafeAreaView, Platform, Modal, FlatList } from 'react-native';
 import MapView, { Polyline, Marker, Region } from 'react-native-maps';
 import * as Location from 'expo-location';
@@ -7,8 +7,11 @@ import * as Haptics from 'expo-haptics';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { format, isSameDay, parseISO } from 'date-fns';
 import { useColorScheme } from '@/hooks/useColorScheme';
-import { initializeDatabase, saveRoute, getRoutesForUser, getRouteById } from '@/database/database';
+import { initializeDatabase, saveRoute, getRoutesForUser, getRouteById, getUserById } from '@/database/database';
 import { Ruta, NewRuta } from '@/database/entities';
+import ActivityCalculator from '@/services/ActivityCalculator';
+import { useUser } from '@/context/UserContext';
+import HealthTracker from '@/services/HealthTracker';
 
 // Define a primary color (you might want to move this to a constants file)
 const PRIMARY_COLOR = '#007AFF';
@@ -120,7 +123,7 @@ export default function MapScreen() {
   const [savedRoutes, setSavedRoutes] = useState<Ruta[]>([]);
   const [selectedRoute, setSelectedRoute] = useState<Ruta | null>(null);
   const [routeModalVisible, setRouteModalVisible] = useState(false);
-  const [currentUserId, setCurrentUserId] = useState<number>(1); // Default user ID, should be replaced with actual user
+  const { currentUserId } = useUser();
   const [saveSuccess, setSaveSuccess] = useState<boolean>(false);
   
   // Debug state
@@ -128,6 +131,13 @@ export default function MapScreen() {
   const [locationDebug, setLocationDebug] = useState<string>("No location");
   const [isRestDay, setIsRestDay] = useState<boolean>(false);
   const [showRestWarning, setShowRestWarning] = useState<boolean>(false);
+  const [showSummary, setShowSummary] = useState<boolean>(false);
+  const [userData, setUserData] = useState({
+    age: 30, // Default age
+    height: 170, // Default height in cm
+    weight: 70, // Default weight in kg
+    gender: 'male' as const, // Default gender
+  });
 
   const colorScheme = useColorScheme();
 
@@ -203,6 +213,30 @@ export default function MapScreen() {
       return () => clearTimeout(timer);
     }
   }, [saveSuccess]);
+
+  // Add this function to fetch user data
+  const fetchUserData = useCallback(async () => {
+    if (!currentUserId) return;
+    
+    try {
+      const user = await getUserById(currentUserId);
+      if (user) {
+        setUserData({
+          age: user.edad || 30,
+          height: user.altura || 170,
+          weight: user.peso || 70,
+          gender: 'male', // Default to male if not specified
+        });
+      }
+    } catch (error) {
+      console.error("Failed to fetch user data:", error);
+    }
+  }, [currentUserId]);
+
+  // Add this to your useEffect
+  useEffect(() => {
+    fetchUserData();
+  }, [fetchUserData]);
 
   // Separate function to get location that can be called directly from a button
   const getCurrentLocation = async () => {
@@ -286,6 +320,23 @@ export default function MapScreen() {
           setErrorMsg("Failed to save route to database");
         }
       }
+
+      // Calculate activity metrics
+      const estimatedSteps = ActivityCalculator.calculateSteps(totalDistance, userData);
+      const estimatedHeartRate = ActivityCalculator.calculateHeartRate(totalDistance, userData);
+
+      // Update health data
+      try {
+        await HealthTracker.updateActivityData({
+          steps: estimatedSteps,
+          distanceKm: totalDistance,
+          heartRate: estimatedHeartRate,
+        });
+      } catch (error) {
+        console.error("Failed to update health data:", error);
+      }
+
+      setShowSummary(true);
     } else {
       // Check if it's a rest day before starting
       if (isRestDay) {
@@ -430,6 +481,31 @@ export default function MapScreen() {
       console.error("Error loading saved route:", error);
       setErrorMsg("Failed to load route");
     }
+  };
+
+  const stopTracking = async () => {
+    if (locationSubscription.current) {
+      locationSubscription.current.remove();
+      locationSubscription.current = null;
+    }
+
+    // Calculate activity metrics
+    const distance = totalDistance || 0;
+    const estimatedSteps = ActivityCalculator.calculateSteps(distance, userData);
+    const estimatedHeartRate = ActivityCalculator.calculateHeartRate(distance, userData);
+
+    // Update health data
+    try {
+      await HealthTracker.updateActivityData({
+        steps: estimatedSteps,
+        distanceKm: distance,
+        heartRate: estimatedHeartRate,
+      });
+    } catch (error) {
+      console.error("Failed to update health data:", error);
+    }
+
+    setShowSummary(true);
   };
 
   return (

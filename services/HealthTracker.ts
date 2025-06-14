@@ -2,6 +2,12 @@ import { Platform } from 'react-native';
 import HealthService, { HealthData } from './HealthService';
 import GoogleFitService from './GoogleFitService';
 
+interface ActivityData {
+  steps: number;
+  distanceKm: number;
+  heartRate: number;
+}
+
 /**
  * HealthTracker - A unified interface for health tracking
  * across iOS and Android platforms
@@ -88,6 +94,18 @@ class HealthTracker {
     }
 
     return this.defaultData;
+  }
+
+  /**
+   * Update activity data after a run
+   * @param data Activity data to update
+   */
+  public static async updateActivityData(data: ActivityData): Promise<void> {
+    if (Platform.OS === 'ios') {
+      await HealthService.updateActivityData(data);
+    } else if (Platform.OS === 'android') {
+      await GoogleFitService.updateActivityData(data);
+    }
   }
 }
 

@@ -2,6 +2,12 @@ import { Platform } from 'react-native';
 import GoogleFit from 'react-native-google-fit';
 import { HealthData } from './HealthService';
 
+interface ActivityData {
+  steps: number;
+  distanceKm: number;
+  heartRate: number;
+}
+
 // Singleton GoogleFitService class
 class GoogleFitService {
   private static instance: GoogleFitService;
@@ -278,6 +284,49 @@ class GoogleFitService {
    */
   public getHealthData(): HealthData {
     return { ...this.healthData };
+  }
+
+  /**
+   * Update activity data after a run
+   * @param data Activity data to update
+   */
+  public static async updateActivityData(data: ActivityData): Promise<void> {
+    if (Platform.OS !== 'android') {
+      console.log('GoogleFit is only available on Android');
+      return;
+    }
+
+    if (!this.isInitialized) {
+      await this.initialize();
+    }
+
+    try {
+      const now = new Date();
+      const startTime = new Date(now.getTime() - 1000 * 60 * 60); // 1 hour ago
+      
+      // Update steps
+      await (GoogleFit as any).saveSteps({
+        startDate: startTime.toISOString(),
+        endDate: now.toISOString(),
+        steps: data.steps,
+      });
+
+      // Update distance
+      await (GoogleFit as any).saveDistance({
+        startDate: startTime.toISOString(),
+        endDate: now.toISOString(),
+        distance: data.distanceKm * 1000, // Convert to meters
+      });
+
+      // Update heart rate
+      await (GoogleFit as any).saveHeartRate({
+        startDate: startTime.toISOString(),
+        endDate: now.toISOString(),
+        value: data.heartRate,
+      });
+    } catch (error) {
+      console.error('Error updating activity data:', error);
+    }
   }
 }
 
