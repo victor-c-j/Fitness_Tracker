@@ -30,6 +30,7 @@
         <category android:name="android.intent.category.BROWSABLE"/>
         <data android:scheme="myapp"/>
         <data android:scheme="com.anonymous.fitnesstracker"/>
+        <data android:scheme="com.fitnessapp.fitnesstracker"/>
       </intent-filter>
     </activity>
   </application>

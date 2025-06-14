@@ -1,4 +1,4 @@
-package com.anonymous.fitnesstracker
+package com.fitnessapp.fitnesstracker
 import expo.modules.splashscreen.SplashScreenManager
 
 import android.os.Build
