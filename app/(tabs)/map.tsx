@@ -9,9 +9,8 @@ import { format, isSameDay, parseISO } from 'date-fns';
 import { useColorScheme } from '@/hooks/useColorScheme';
 import { initializeDatabase, saveRoute, getRoutesForUser, getRouteById, getUserById } from '@/database/database';
 import { Ruta, NewRuta } from '@/database/entities';
-import ActivityCalculator from '@/services/ActivityCalculator';
-import { useUser } from '@/context/UserContext';
 import HealthTracker from '@/services/HealthTracker';
+import { useUser } from '@/context/UserContext';
 
 // Define a primary color (you might want to move this to a constants file)
 const PRIMARY_COLOR = '#007AFF';
@@ -99,6 +98,7 @@ function RestDayWarning({ onClose }: { onClose: () => void }) {
 }
 
 export default function MapScreen() {
+  const { currentUserId } = useUser();
   // --- Refs ---
   const mapRef = useRef<MapView>(null); // Ref for MapView
   const locationSubscription = useRef<Location.LocationSubscription | null>(null);
@@ -123,7 +123,6 @@ export default function MapScreen() {
   const [savedRoutes, setSavedRoutes] = useState<Ruta[]>([]);
   const [selectedRoute, setSelectedRoute] = useState<Ruta | null>(null);
   const [routeModalVisible, setRouteModalVisible] = useState(false);
-  const { currentUserId } = useUser();
   const [saveSuccess, setSaveSuccess] = useState<boolean>(false);
   
   // Debug state
@@ -131,15 +130,32 @@ export default function MapScreen() {
   const [locationDebug, setLocationDebug] = useState<string>("No location");
   const [isRestDay, setIsRestDay] = useState<boolean>(false);
   const [showRestWarning, setShowRestWarning] = useState<boolean>(false);
-  const [showSummary, setShowSummary] = useState<boolean>(false);
-  const [userData, setUserData] = useState({
-    age: 30, // Default age
-    height: 170, // Default height in cm
-    weight: 70, // Default weight in kg
-    gender: 'male' as const, // Default gender
-  });
 
   const colorScheme = useColorScheme();
+
+  // Add user data state
+  const [userData, setUserData] = useState({
+    weight: null as number | null,
+  });
+
+  // Add function to fetch user data
+  const fetchUserData = useCallback(async () => {
+    if (!currentUserId) return;
+    
+    try {
+      const user = await getUserById(currentUserId);
+      setUserData({
+        weight: user?.peso ?? null,
+      });
+    } catch (error) {
+      console.error("Failed to fetch user data:", error);
+    }
+  }, [currentUserId]);
+
+  // Add useEffect to fetch user data
+  useEffect(() => {
+    fetchUserData();
+  }, [fetchUserData]);
 
   // --- Effects ---
 
@@ -214,30 +230,6 @@ export default function MapScreen() {
     }
   }, [saveSuccess]);
 
-  // Add this function to fetch user data
-  const fetchUserData = useCallback(async () => {
-    if (!currentUserId) return;
-    
-    try {
-      const user = await getUserById(currentUserId);
-      if (user) {
-        setUserData({
-          age: user.edad || 30,
-          height: user.altura || 170,
-          weight: user.peso || 70,
-          gender: 'male', // Default to male if not specified
-        });
-      }
-    } catch (error) {
-      console.error("Failed to fetch user data:", error);
-    }
-  }, [currentUserId]);
-
-  // Add this to your useEffect
-  useEffect(() => {
-    fetchUserData();
-  }, [fetchUserData]);
-
   // Separate function to get location that can be called directly from a button
   const getCurrentLocation = async () => {
     try {
@@ -277,7 +269,7 @@ export default function MapScreen() {
     }
   };
 
-  // Modified toggleRecording to add rest day confirmation
+  // Modified toggleRecording to add health data update
   const toggleRecording = async () => {
     if (isRecording) {
       // Stop recording - keep existing logic
@@ -295,6 +287,10 @@ export default function MapScreen() {
       
       // Log the results
       console.log(`Recording stopped. Duration: ${formatTime(elapsedTime)}, Distance: ${(totalDistance / 1000).toFixed(2)}km`);
+      
+      // Update health data based on the run
+      const distanceKm = totalDistance / 1000;
+      HealthTracker.updateHealthDataFromRun(distanceKm, userData.weight);
       
       // Save the route to the database
       if (routeCoordinates.length > 0) {
@@ -320,23 +316,6 @@ export default function MapScreen() {
           setErrorMsg("Failed to save route to database");
         }
       }
-
-      // Calculate activity metrics
-      const estimatedSteps = ActivityCalculator.calculateSteps(totalDistance, userData);
-      const estimatedHeartRate = ActivityCalculator.calculateHeartRate(totalDistance, userData);
-
-      // Update health data
-      try {
-        await HealthTracker.updateActivityData({
-          steps: estimatedSteps,
-          distanceKm: totalDistance,
-          heartRate: estimatedHeartRate,
-        });
-      } catch (error) {
-        console.error("Failed to update health data:", error);
-      }
-
-      setShowSummary(true);
     } else {
       // Check if it's a rest day before starting
       if (isRestDay) {
@@ -481,31 +460,6 @@ export default function MapScreen() {
       console.error("Error loading saved route:", error);
       setErrorMsg("Failed to load route");
     }
-  };
-
-  const stopTracking = async () => {
-    if (locationSubscription.current) {
-      locationSubscription.current.remove();
-      locationSubscription.current = null;
-    }
-
-    // Calculate activity metrics
-    const distance = totalDistance || 0;
-    const estimatedSteps = ActivityCalculator.calculateSteps(distance, userData);
-    const estimatedHeartRate = ActivityCalculator.calculateHeartRate(distance, userData);
-
-    // Update health data
-    try {
-      await HealthTracker.updateActivityData({
-        steps: estimatedSteps,
-        distanceKm: distance,
-        heartRate: estimatedHeartRate,
-      });
-    } catch (error) {
-      console.error("Failed to update health data:", error);
-    }
-
-    setShowSummary(true);
   };
 
   return (

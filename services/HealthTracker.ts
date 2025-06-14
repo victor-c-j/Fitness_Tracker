@@ -1,12 +1,7 @@
 import { Platform } from 'react-native';
-import HealthService, { HealthData } from './HealthService';
-import GoogleFitService from './GoogleFitService';
-
-interface ActivityData {
-  steps: number;
-  distanceKm: number;
-  heartRate: number;
-}
+import { HealthData } from './HealthService';
+import { format } from 'date-fns';
+import { getRoutesForUser } from '@/database/database';
 
 /**
  * HealthTracker - A unified interface for health tracking
@@ -24,6 +19,9 @@ class HealthTracker {
     lastUpdated: new Date(),
   };
 
+  private dailyDistances: { [date: string]: number } = {};
+  private currentUserId: number | null = null;
+
   private constructor() {}
 
   public static getInstance(): HealthTracker {
@@ -31,6 +29,43 @@ class HealthTracker {
       HealthTracker.instance = new HealthTracker();
     }
     return HealthTracker.instance;
+  }
+
+  /**
+   * Set current user ID
+   */
+  public setCurrentUser(userId: number | null): void {
+    this.currentUserId = userId;
+    if (userId) {
+      this.loadTodayDistances();
+    }
+  }
+
+  /**
+   * Load today's distances from database
+   */
+  private async loadTodayDistances(): Promise<void> {
+    if (!this.currentUserId) return;
+
+    try {
+      const today = format(new Date(), 'yyyy-MM-dd');
+      const routes = await getRoutesForUser(this.currentUserId);
+      
+      // Filter routes from today and sum their distances
+      const todayRoutes = routes.filter(route => 
+        format(new Date(route.fecha), 'yyyy-MM-dd') === today
+      );
+      
+      const totalDistance = todayRoutes.reduce((sum, route) => sum + route.distancia, 0) / 1000; // Convert to km
+      this.dailyDistances[today] = totalDistance;
+      
+      // Update default data
+      this.defaultData.distanceKm = totalDistance;
+      this.defaultData.steps = this.calculateStepsFromDistance(totalDistance);
+      this.defaultData.lastUpdated = new Date();
+    } catch (error) {
+      console.error('Error loading today\'s distances:', error);
+    }
   }
 
   /**
@@ -42,16 +77,11 @@ class HealthTracker {
     }
 
     try {
-      if (Platform.OS === 'ios') {
-        this.isInitialized = await HealthService.initialize();
-      } else if (Platform.OS === 'android') {
-        this.isInitialized = await GoogleFitService.initialize();
-      } else {
-        console.log('Health tracking not supported on this platform');
-        return false;
+      this.isInitialized = true;
+      if (this.currentUserId) {
+        await this.loadTodayDistances();
       }
-      
-      return this.isInitialized;
+      return true;
     } catch (error) {
       console.error('Error initializing health tracking:', error);
       return false;
@@ -59,20 +89,67 @@ class HealthTracker {
   }
 
   /**
-   * Get health data from the appropriate health service
+   * Get health data
    */
   public getHealthData(): HealthData {
-    if (!this.isInitialized) {
-      return this.defaultData;
-    }
-
-    if (Platform.OS === 'ios') {
-      return HealthService.getHealthData();
-    } else if (Platform.OS === 'android') {
-      return GoogleFitService.getHealthData();
-    }
-
     return this.defaultData;
+  }
+
+  /**
+   * Calculate steps based on distance
+   * Average stride length is about 0.762 meters (2.5 feet)
+   */
+  private calculateStepsFromDistance(distanceKm: number): number {
+    const strideLengthMeters = 0.762;
+    const distanceMeters = distanceKm * 1000;
+    return Math.round(distanceMeters / strideLengthMeters);
+  }
+
+  /**
+   * Calculate heart rate based on distance and user data
+   * This is a simplified calculation based on average running heart rate
+   */
+  private calculateHeartRate(distanceKm: number, weight: number | null): number {
+    // If no weight data, use a default calculation
+    const effectiveWeight = weight ?? 70;
+    
+    // Base heart rate for running (varies by person but using average)
+    const baseHeartRate = 120;
+    
+    // Adjust heart rate based on distance and weight
+    // More distance and higher weight = higher heart rate
+    const distanceFactor = Math.min(distanceKm * 5, 30); // Max 30 bpm increase
+    const weightFactor = Math.min((effectiveWeight - 70) * 0.5, 10); // Max 10 bpm increase
+    
+    return Math.round(baseHeartRate + distanceFactor + weightFactor);
+  }
+
+  /**
+   * Get today's total distance
+   */
+  private getTodayDistance(): number {
+    const today = format(new Date(), 'yyyy-MM-dd');
+    return this.dailyDistances[today] || 0;
+  }
+
+  /**
+   * Update health data based on running distance
+   */
+  public updateHealthDataFromRun(distanceKm: number, weight: number | null): void {
+    const today = format(new Date(), 'yyyy-MM-dd');
+    this.dailyDistances[today] = (this.dailyDistances[today] || 0) + distanceKm;
+    
+    const totalDistance = this.getTodayDistance();
+    const steps = this.calculateStepsFromDistance(totalDistance);
+    const heartRate = this.calculateHeartRate(distanceKm, weight);
+    
+    this.defaultData = {
+      ...this.defaultData,
+      steps,
+      distanceKm: totalDistance,
+      heartRate,
+      lastUpdated: new Date(),
+    };
   }
 
   /**
@@ -82,30 +159,12 @@ class HealthTracker {
     if (!this.isInitialized) {
       await this.initialize();
     }
-
-    try {
-      if (Platform.OS === 'ios') {
-        return await HealthService.fetchAllHealthData();
-      } else if (Platform.OS === 'android') {
-        return await GoogleFitService.fetchAllHealthData();
-      }
-    } catch (error) {
-      console.error('Error refreshing health data:', error);
+    
+    if (this.currentUserId) {
+      await this.loadTodayDistances();
     }
-
+    
     return this.defaultData;
-  }
-
-  /**
-   * Update activity data after a run
-   * @param data Activity data to update
-   */
-  public static async updateActivityData(data: ActivityData): Promise<void> {
-    if (Platform.OS === 'ios') {
-      await HealthService.updateActivityData(data);
-    } else if (Platform.OS === 'android') {
-      await GoogleFitService.updateActivityData(data);
-    }
   }
 }
 

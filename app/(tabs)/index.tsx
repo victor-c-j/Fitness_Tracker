@@ -68,6 +68,9 @@ export default function HomeScreen() {
   // Initialize health tracking
   const initializeHealthTracking = useCallback(async () => {
     try {
+      // Set current user ID in HealthTracker
+      HealthTracker.setCurrentUser(currentUserId);
+      
       const initialized = await HealthTracker.initialize();
       
       if (initialized) {
@@ -79,7 +82,12 @@ export default function HomeScreen() {
     } catch (error) {
       console.error('Error initializing health tracking:', error);
     }
-  }, []);
+  }, [currentUserId]);
+  
+  // Update HealthTracker when user changes
+  useEffect(() => {
+    HealthTracker.setCurrentUser(currentUserId);
+  }, [currentUserId]);
   
   // Refresh health data
   const refreshHealthData = useCallback(async () => {
@@ -233,6 +241,7 @@ export default function HomeScreen() {
   // Refresh data when screen comes into focus
   useFocusEffect(
     useCallback(() => {
+      console.log('Home screen focused, refreshing data...');
       fetchCaloriesConsumed();
       refreshHealthData();
       checkRestDay();
@@ -384,7 +393,7 @@ export default function HomeScreen() {
                 color={'white'}
               />
               <View>
-                <Text variant="titleMedium" style={{ color: textColor }}>{healthData.distanceKm.toFixed(1)} km</Text>
+                <Text variant="titleMedium" style={{ color: textColor }}>{healthData.distanceKm.toFixed(2)} km</Text>
                 <Text variant="bodySmall" style={{ color: subtextColor }}>Distance</Text>
               </View>
             </Card.Content>
